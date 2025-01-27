@@ -52,7 +52,7 @@ export default function FileUpload() {
 
             ws.current.onerror = (error) => {
                 console.error('WebSocket error:', error);
-                // setUploadMessage({ type: 'error', text: 'WebSocket connection failed.' });
+                setUploadMessage({ type: 'error', text: 'WebSocket connection failed.' });
             };
         };
 
@@ -107,6 +107,7 @@ export default function FileUpload() {
     };
 
     // Handle upload button click
+    console.log(`${BASE_URL}/upload`);
     const handleUpload = async () => {
         if (!fileContents || !projectName || !runCommand) return;
 
@@ -121,6 +122,7 @@ export default function FileUpload() {
                     files: fileContents,
                     runCommand,
                 }),
+
             });
 
             if (!response.ok) {
