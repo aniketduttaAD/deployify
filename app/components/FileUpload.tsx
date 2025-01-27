@@ -113,7 +113,7 @@ export default function FileUpload() {
         try {
             setIsUploading(true);
 
-            const response = await fetch('http://localhost:5001/projects/upload', {
+            const response = await fetch(`${BASE_URL}/upload`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
