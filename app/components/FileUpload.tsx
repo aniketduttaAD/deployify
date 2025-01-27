@@ -22,7 +22,7 @@ export default function FileUpload() {
 
     const restrictedFolders = ['node_modules'];
     const ws = useRef<WebSocket | null>(null);
-    const BASE_URL = process.env.BASE_URL ?? "http://localhost:5001";
+    const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:5001";
     const wsURL = BASE_URL.replace(/^https/, 'wss');
 
     // WebSocket Initialization and Cleanup

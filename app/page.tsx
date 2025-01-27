@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 export default function Home() {
   const [isServerRunning, setIsServerRunning] = useState(true);
-  const BASE_URL = process.env.BASE_URL ?? "http://localhost:5001/health";
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:5001/health";
 
   // Function to check the health of the server
   const checkServerHealth = useCallback(async () => {
