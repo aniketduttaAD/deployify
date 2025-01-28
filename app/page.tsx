@@ -77,7 +77,7 @@ export default function Home() {
       {/* Footer Section */}
       <Box sx={{ mt: 8, color: 'text.secondary' }}>
         <Typography variant="caption">
-          Built with ❤️ by Deployify Team. Simplifying deployments, one project at a time.
+          Built with ❤️ by Aniket Dutta. Simplifying deployments, one project at a time.
         </Typography>
       </Box>
     </Container>
