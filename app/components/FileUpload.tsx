@@ -49,7 +49,7 @@ export default function FileUpload() {
         "frontend" | "backend" | null
     >(null);
 
-    const restrictedFolders = ["node_modules"];
+    const restrictedFolders = ["node_modules", "yarn.lock", "package-lock.json"];
     const ws = useRef<WebSocket | null>(null);
     const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:5001";
     const wsURL = BASE_URL.replace(/^https/, "wss");
@@ -150,7 +150,14 @@ export default function FileUpload() {
     };
 
     const handleUpload = async () => {
-        if (!fileContents || !projectName || !runCommand || !language) return;
+        if (
+            !fileContents ||
+            !projectName ||
+            !runCommand ||
+            !language ||
+            !selectedOption
+        )
+            return;
 
         try {
             setIsUploading(true);
@@ -296,7 +303,16 @@ export default function FileUpload() {
                     <Box
                         sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}
                     >
-                        {(["nodejs", "python", "golang", "php", "reactjs", "nextjs"] as const).map((lang) => {
+                        {(
+                            [
+                                "nodejs",
+                                "python",
+                                "golang",
+                                "php",
+                                "reactjs",
+                                "nextjs",
+                            ] as const
+                        ).map((lang) => {
                             const imageSrc =
                                 selectedOption === "backend"
                                     ? lang === "nodejs"
@@ -308,7 +324,8 @@ export default function FileUpload() {
                                                 : lang === "php"
                                                     ? PHPImage
                                                     : ""
-                                    : selectedOption === "frontend" && (lang === "reactjs" || lang === "nextjs")
+                                    : selectedOption === "frontend" &&
+                                        (lang === "reactjs" || lang === "nextjs")
                                         ? lang === "reactjs"
                                             ? ReactJSImage
                                             : NextJSImage
@@ -327,13 +344,15 @@ export default function FileUpload() {
                                             width: 90,
                                             height: 90,
                                             borderRadius: "50%",
-                                            border: `4px solid ${language === lang ? "#1976d2" : "#fafafa"}`,
+                                            border: `2px solid ${language === lang ? "#1976d2" : "#fafafa"
+                                                }`,
                                             display: "flex",
                                             justifyContent: "center",
                                             alignItems: "center",
                                             cursor: "pointer",
                                             backgroundColor: "#fff",
-                                            transition: "background-color 0.3s ease, border-color 0.3s ease",
+                                            transition:
+                                                "background-color 0.3s ease, border-color 0.3s ease",
                                             "&:hover": {
                                                 backgroundColor: "#e3f2fd",
                                                 borderColor: "#1976d2",
@@ -382,7 +401,7 @@ export default function FileUpload() {
                             <TextField
                                 label='Project Name'
                                 fullWidth
-                                sx={{ mb: 2 }}
+                                sx={{ mb: 2, mt: 2 }}
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
                             />
