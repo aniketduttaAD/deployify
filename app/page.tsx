@@ -38,7 +38,7 @@ export default function Home() {
       <title>Deployify</title>
 
       {/* Header Section */}
-      <Box sx={{ mb: 6 }}>
+      <Box sx={{ mb: 0 }}>
         <Typography variant='h3' fontWeight={700} gutterBottom>
           Deployify
         </Typography>

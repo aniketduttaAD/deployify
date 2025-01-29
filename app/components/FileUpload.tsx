@@ -21,6 +21,9 @@ import GolangImage from "../../assets/golang.gif";
 import PythonImage from "../../assets/python.gif";
 import ReactJSImage from "../../assets/reactjs.gif";
 import NextJSImage from "../../assets/nextjs.png";
+import AngularJSImage from "../../assets/angularjs.gif";
+import VueJSImage from "../../assets/vuejs.gif";
+import HTMLImage from "../../assets/html.gif";
 import FrontendGif from "../../assets/frontend.gif";
 import BackendGif from "../../assets/backend.gif";
 import Image from "next/image";
@@ -61,6 +64,9 @@ export default function FileUpload() {
         php: ["composer.json"],
         nextjs: ["package.json"],
         reactjs: ["package.json"],
+        angularjs: ["package.json"],
+        vuejs: ["package.json"],
+        html: ["index.html"],
     };
 
     const validateFiles = (files: FileItem[]) => {
@@ -311,6 +317,9 @@ export default function FileUpload() {
                                 "php",
                                 "reactjs",
                                 "nextjs",
+                                "vuejs",
+                                "angularjs",
+                                "html",
                             ] as const
                         ).map((lang) => {
                             const imageSrc =
@@ -325,11 +334,13 @@ export default function FileUpload() {
                                                     ? PHPImage
                                                     : ""
                                     : selectedOption === "frontend" &&
-                                        (lang === "reactjs" || lang === "nextjs")
-                                        ? lang === "reactjs"
-                                            ? ReactJSImage
-                                            : NextJSImage
-                                        : "";
+                                        lang === "reactjs"
+                                        ? ReactJSImage : lang === "nextjs"
+                                            ? NextJSImage : lang === "angularjs"
+                                                ? AngularJSImage : lang === "vuejs"
+                                                    ? VueJSImage : lang === "html"
+                                                        ? HTMLImage
+                                                        : "";
                             if (!imageSrc) return null;
                             return (
                                 <motion.div
@@ -359,7 +370,13 @@ export default function FileUpload() {
                                             },
                                         }}
                                     >
-                                        <Image src={imageSrc} alt={lang} width={54} height={54} />
+                                        <Image
+                                            src={imageSrc}
+                                            alt={lang}
+                                            width={54}
+                                            height={54}
+                                            unoptimized
+                                        />
                                     </Box>
                                 </motion.div>
                             );
