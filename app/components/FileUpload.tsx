@@ -15,11 +15,16 @@ import {
     ListItem,
 } from "@mui/material";
 import JSZip from "jszip";
-import NodeJSImage from "../../assets/nodejs.png";
-import PHPImage from "../../assets/php.png";
-import GolangImage from "../../assets/golang.png";
-import PythonImage from "../../assets/python.png";
+import NodeJSImage from "../../assets/nodejs.gif";
+import PHPImage from "../../assets/php.gif";
+import GolangImage from "../../assets/golang.gif";
+import PythonImage from "../../assets/python.gif";
+import ReactJSImage from "../../assets/reactjs.gif";
+import NextJSImage from "../../assets/nextjs.png";
+import FrontendGif from "../../assets/frontend.gif";
+import BackendGif from "../../assets/backend.gif";
 import Image from "next/image";
+import { motion } from "framer-motion";
 
 type FileItem = {
     path: string;
@@ -40,6 +45,9 @@ export default function FileUpload() {
     const [language, setLanguage] = useState<keyof typeof requiredFiles | null>(
         null
     );
+    const [selectedOption, setSelectedOption] = useState<
+        "frontend" | "backend" | null
+    >(null);
 
     const restrictedFolders = ["node_modules"];
     const ws = useRef<WebSocket | null>(null);
@@ -51,6 +59,8 @@ export default function FileUpload() {
         python: ["requirements.txt"],
         golang: ["go.mod", "go.sum"],
         php: ["composer.json"],
+        nextjs: ["package.json"],
+        reactjs: ["package.json"],
     };
 
     const validateFiles = (files: FileItem[]) => {
@@ -181,55 +191,163 @@ export default function FileUpload() {
             sx={{
                 maxWidth: 600,
                 mx: "auto",
-                p: 4,
-                borderRadius: 3,
-                boxShadow: 6,
-                backgroundColor: "white",
+                p: 3,
+                borderRadius: 4,
+                boxShadow: 4,
+                backgroundColor: "#fff",
+                transition: "box-shadow 0.3s ease",
+                "&:hover": { boxShadow: "0px 8px 20px rgba(0, 0, 0, 0.1)" },
             }}
         >
-            {!language && (
-                <Typography variant='h4' align='center' paddingBottom={2}>
-                    Choose a Language
+            {selectedOption === null && (
+                <Typography variant='h5' align='center' sx={{ mb: 2, fontWeight: 600 }}>
+                    Choose an Option
                 </Typography>
             )}
-
-            <Box sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}>
-                {(["nodejs", "python", "golang", "php"] as const).map((lang) => (
-                    <Box
-                        key={lang}
-                        onClick={() => setLanguage(lang)}
-                        sx={{
-                            width: 100,
-                            height: 100,
-                            borderRadius: "50%",
-                            border: `4px solid ${language === lang ? "#3087c9" : "transparent"
-                                }`,
-                            display: "flex",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            cursor: "pointer",
-                            backgroundColor: "#f4f4f4",
-                            "&:hover": { backgroundColor: "#e0e0e0" },
-                        }}
-                    >
-                        <Image
-                            src={
-                                lang === "nodejs"
-                                    ? NodeJSImage
-                                    : lang === "python"
-                                        ? PythonImage
-                                        : lang === "golang"
-                                            ? GolangImage
-                                            : PHPImage
-                            }
-                            alt={lang}
-                            width={50}
-                            height={50}
-                        />
-                    </Box>
-                ))}
+            <Box sx={{ display: "flex", justifyContent: "center", gap: 4, mb: 4 }}>
+                {selectedOption === null && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: selectedOption === null ? 1 : 0 }}
+                            transition={{ duration: 0.5 }}
+                        >
+                            <Box
+                                onClick={() => setSelectedOption("frontend")}
+                                sx={{
+                                    cursor: "pointer",
+                                    textAlign: "center",
+                                    width: 100,
+                                    display: "inline-block",
+                                    transition:
+                                        "transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease",
+                                    "&:hover": {
+                                        transform: "scale(1.1)",
+                                        boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
+                                        backgroundColor: "#f5f5f5",
+                                    },
+                                }}
+                            >
+                                <Image
+                                    src={FrontendGif}
+                                    alt='Frontend'
+                                    width={100}
+                                    height={100}
+                                />
+                                <Typography>Frontend</Typography>
+                            </Box>
+                        </motion.div>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: selectedOption === null ? 1 : 0 }}
+                            transition={{ duration: 0.5 }}
+                        >
+                            <Box
+                                onClick={() => setSelectedOption("backend")}
+                                sx={{
+                                    cursor: "pointer",
+                                    textAlign: "center",
+                                    width: 100,
+                                    display: "inline-block",
+                                    transition:
+                                        "transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease",
+                                    "&:hover": {
+                                        transform: "scale(1.1)",
+                                        boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
+                                        backgroundColor: "#f5f5f5",
+                                    },
+                                }}
+                            >
+                                <Image
+                                    src={BackendGif}
+                                    alt='Backend'
+                                    width={100}
+                                    height={100}
+                                />
+                                <Typography sx={{ mt: 1 }}>Backend</Typography>
+                            </Box>
+                        </motion.div>
+                    </>
+                )}
             </Box>
-
+            {selectedOption && (
+                <Box>
+                    <Typography
+                        variant='h5'
+                        align='center'
+                        sx={{ mb: 2, fontWeight: 600 }}
+                    >
+                        Choose a Language
+                    </Typography>
+                    {selectedOption && (
+                        <>
+                            <Image
+                                src={selectedOption === "backend" ? BackendGif : FrontendGif}
+                                alt='Backend'
+                                width={100}
+                                height={100}
+                                onClick={() => setSelectedOption(null)}
+                            />
+                            <Typography sx={{ mt: -2, mb: 2 }}>
+                                {selectedOption === "backend" ? "Backend" : "Frontend"}
+                            </Typography>
+                        </>
+                    )}
+                    <Box
+                        sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}
+                    >
+                        {(["nodejs", "python", "golang", "php", "reactjs", "nextjs"] as const).map((lang) => {
+                            const imageSrc =
+                                selectedOption === "backend"
+                                    ? lang === "nodejs"
+                                        ? NodeJSImage
+                                        : lang === "python"
+                                            ? PythonImage
+                                            : lang === "golang"
+                                                ? GolangImage
+                                                : lang === "php"
+                                                    ? PHPImage
+                                                    : ""
+                                    : selectedOption === "frontend" && (lang === "reactjs" || lang === "nextjs")
+                                        ? lang === "reactjs"
+                                            ? ReactJSImage
+                                            : NextJSImage
+                                        : "";
+                            if (!imageSrc) return null;
+                            return (
+                                <motion.div
+                                    key={lang}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: selectedOption ? 1 : 0 }}
+                                    transition={{ duration: 0.5 }}
+                                >
+                                    <Box
+                                        onClick={() => setLanguage(lang)}
+                                        sx={{
+                                            width: 90,
+                                            height: 90,
+                                            borderRadius: "50%",
+                                            border: `4px solid ${language === lang ? "#1976d2" : "#fafafa"}`,
+                                            display: "flex",
+                                            justifyContent: "center",
+                                            alignItems: "center",
+                                            cursor: "pointer",
+                                            backgroundColor: "#fff",
+                                            transition: "background-color 0.3s ease, border-color 0.3s ease",
+                                            "&:hover": {
+                                                backgroundColor: "#e3f2fd",
+                                                borderColor: "#1976d2",
+                                            },
+                                        }}
+                                    >
+                                        <Image src={imageSrc} alt={lang} width={54} height={54} />
+                                    </Box>
+                                </motion.div>
+                            );
+                        })}
+                    </Box>
+                </Box>
+            )}
             {language && (
                 <Box>
                     <Box
@@ -241,6 +359,7 @@ export default function FileUpload() {
                             cursor: "pointer",
                             backgroundColor: "#fafafa",
                             "&:hover": { backgroundColor: "#f0f0f0" },
+                            transition: "background-color 0.3s ease",
                         }}
                     >
                         <input {...getInputProps()} />
@@ -248,29 +367,24 @@ export default function FileUpload() {
                             Drag & drop your project zip file here, or click to upload
                         </Typography>
                     </Box>
-
                     {missingFiles.length > 0 && (
                         <Alert severity='error' sx={{ mt: 2 }}>
                             Missing Files: {missingFiles.join(", ")}
                         </Alert>
                     )}
-
                     <Dialog
                         open={projectDialogOpen}
                         onClose={() => setProjectDialogOpen(false)}
                         fullWidth
                     >
-                        <DialogTitle>
-                            Enter Project Details
-                        </DialogTitle>
+                        <DialogTitle>Enter Project Details</DialogTitle>
                         <DialogContent>
                             <TextField
                                 label='Project Name'
                                 fullWidth
-                                style={{ marginTop: 6 }}
+                                sx={{ mb: 2 }}
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
-                                sx={{ mb: 2 }}
                             />
                             <TextField
                                 label='Run Command'
@@ -289,7 +403,7 @@ export default function FileUpload() {
                                     mb: 2,
                                 }}
                             >
-                                <Typography variant="h6" mb={1}>
+                                <Typography variant='h6' mb={1}>
                                     Files in Zip:
                                 </Typography>
                                 <List>
@@ -311,7 +425,6 @@ export default function FileUpload() {
                             </Button>
                         </DialogActions>
                     </Dialog>
-
                     {uploadMessage && (
                         <Alert severity={uploadMessage.type} sx={{ mt: 2 }}>
                             {uploadMessage.text}
