@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import {
     Box,
@@ -24,9 +24,11 @@ import NextJSImage from "../../assets/nextjs.png";
 import AngularJSImage from "../../assets/angularjs.gif";
 import VueJSImage from "../../assets/vuejs.gif";
 import HTMLImage from "../../assets/html.gif";
+import MongoDBGif from "../../assets/mongodb.gif";
 import FrontendGif from "../../assets/frontend.gif";
 import BackendGif from "../../assets/backend.gif";
-import Image from "next/image";
+import DatabaseGif from "../../assets/database.gif";
+import Image, { StaticImageData } from "next/image";
 import { motion } from "framer-motion";
 
 type FileItem = {
@@ -49,13 +51,11 @@ export default function FileUpload() {
         null
     );
     const [selectedOption, setSelectedOption] = useState<
-        "frontend" | "backend" | null
+        "frontend" | "backend" | "database" | null
     >(null);
 
     const restrictedFolders = ["node_modules", "yarn.lock", "package-lock.json"];
-    const ws = useRef<WebSocket | null>(null);
     const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:5001";
-    const wsURL = BASE_URL.replace(/^https/, "wss");
 
     const requiredFiles = {
         nodejs: ["package.json"],
@@ -67,7 +67,21 @@ export default function FileUpload() {
         angularjs: ["package.json"],
         vuejs: ["package.json"],
         html: ["index.html"],
+        mongodb: [],
     };
+
+    const languages = [
+        "nodejs",
+        "python",
+        "golang",
+        "php",
+        "reactjs",
+        "nextjs",
+        "vuejs",
+        "angularjs",
+        "html",
+        "mongodb",
+    ] as const;
 
     const validateFiles = (files: FileItem[]) => {
         if (!language || !(language in requiredFiles)) return false;
@@ -78,40 +92,6 @@ export default function FileUpload() {
         setMissingFiles(missing);
         return missing.length === 0;
     };
-
-    useEffect(() => {
-        const connectWebSocket = () => {
-            ws.current = new WebSocket(wsURL);
-            ws.current.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.status === "progress") {
-                } else if (data.status === "success") {
-                    setIsUploading(false);
-                    setUploadMessage({ type: "success", text: data.message });
-                    setProjectDialogOpen(false);
-                } else if (data.status === "error") {
-                    setIsUploading(false);
-                    setUploadMessage({ type: "error", text: data.error });
-                }
-            };
-
-            ws.current.onclose = () => {
-                console.error("WebSocket connection closed. Retrying...");
-                setTimeout(connectWebSocket, 5000);
-            };
-
-            ws.current.onerror = (error) => {
-                console.error("WebSocket error:", error);
-                setUploadMessage({
-                    type: "error",
-                    text: "WebSocket connection failed.",
-                });
-            };
-        };
-
-        connectWebSocket();
-        return () => ws.current?.close();
-    }, [wsURL]);
 
     const onDrop = async (acceptedFiles: File[]) => {
         setMissingFiles([]);
@@ -155,30 +135,75 @@ export default function FileUpload() {
         }
     };
 
+    useEffect(() => {
+        if (language === "mongodb") {
+            setProjectDialogOpen(true);
+        }
+    }, [language]);
+
     const handleUpload = async () => {
         if (
-            !fileContents ||
-            !projectName ||
-            !runCommand ||
-            !language ||
-            !selectedOption
-        )
+            (language === "mongodb" && !projectName) ||
+            (language !== "mongodb" &&
+                (!fileContents ||
+                    !projectName ||
+                    !runCommand ||
+                    !language ||
+                    !selectedOption))
+        ) {
             return;
+        }
+        const bodyData: {
+            projectName: string;
+            language: string;
+            files?: unknown;
+            runCommand?: string;
+        } = {
+            projectName,
+            language: language.toLowerCase(),
+        };
+
+        if (language !== "mongodb") {
+            bodyData.files = fileContents;
+            bodyData.runCommand = runCommand;
+        }
 
         try {
             setIsUploading(true);
             const response = await fetch(`${BASE_URL}/upload`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    projectName,
-                    files: fileContents,
-                    runCommand,
-                    language: language.toLowerCase(),
-                }),
+                body: JSON.stringify(bodyData),
             });
+            if (response.ok) {
+                const responseData = await response.json();
+                const successMessage = responseData.message || "Upload successful";
+                if (language === "mongodb") {
+                    const mongodbDetails = `
+                MongoDB URL: ${responseData.mongodbUrl}
+                Mongo Express URL: ${responseData.mongoExpressUrl}
+                Username: ${responseData.username}
+                Password: ${responseData.password}
+                `;
+                    const successMessageWithDetails = `${successMessage}\n${mongodbDetails}`;
 
-            if (!response.ok) {
+                    const formattedMessage = successMessageWithDetails.split("\n").map((item, index) => (
+                        <span key={index}>
+                            {item}
+                            <br />
+                        </span>
+                    ));
+                    setUploadMessage({
+                        type: "success",
+                        text: String(formattedMessage),
+                    });
+                } else {
+                    setUploadMessage({
+                        type: "success",
+                        text: successMessage,
+                    });
+                }
+            } else {
                 const errorData = await response.json();
                 setUploadMessage({
                     type: "error",
@@ -191,6 +216,11 @@ export default function FileUpload() {
                 type: "error",
                 text: "Upload failed. Please try again.",
             });
+            setProjectDialogOpen(false);
+            setIsUploading(false);
+        } finally {
+            setIsUploading(false);
+            setProjectDialogOpen(false);
         }
     };
 
@@ -280,6 +310,36 @@ export default function FileUpload() {
                                 <Typography sx={{ mt: 1 }}>Backend</Typography>
                             </Box>
                         </motion.div>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: selectedOption === null ? 1 : 0 }}
+                            transition={{ duration: 0.5 }}
+                        >
+                            <Box
+                                onClick={() => setSelectedOption("database")}
+                                sx={{
+                                    cursor: "pointer",
+                                    textAlign: "center",
+                                    width: 100,
+                                    display: "inline-block",
+                                    transition:
+                                        "transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease",
+                                    "&:hover": {
+                                        transform: "scale(1.1)",
+                                        boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
+                                        backgroundColor: "#f5f5f5",
+                                    },
+                                }}
+                            >
+                                <Image
+                                    src={DatabaseGif}
+                                    alt='Database'
+                                    width={100}
+                                    height={100}
+                                />
+                                <Typography>Database</Typography>
+                            </Box>
+                        </motion.div>
                     </>
                 )}
             </Box>
@@ -295,53 +355,38 @@ export default function FileUpload() {
                     {selectedOption && (
                         <>
                             <Image
-                                src={selectedOption === "backend" ? BackendGif : FrontendGif}
+                                src={selectedOption === "backend" ? BackendGif : selectedOption === "frontend" ? FrontendGif : DatabaseGif}
                                 alt='Backend'
                                 width={100}
                                 height={100}
                                 onClick={() => setSelectedOption(null)}
                             />
                             <Typography sx={{ mt: -2, mb: 2 }}>
-                                {selectedOption === "backend" ? "Backend" : "Frontend"}
+                                {selectedOption === "backend" ? "Backend" : selectedOption === "frontend" ? "Frontend" : "Database"}
                             </Typography>
                         </>
                     )}
-                    <Box
-                        sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}
-                    >
-                        {(
-                            [
-                                "nodejs",
-                                "python",
-                                "golang",
-                                "php",
-                                "reactjs",
-                                "nextjs",
-                                "vuejs",
-                                "angularjs",
-                                "html",
-                            ] as const
-                        ).map((lang) => {
-                            const imageSrc =
-                                selectedOption === "backend"
-                                    ? lang === "nodejs"
-                                        ? NodeJSImage
-                                        : lang === "python"
-                                            ? PythonImage
-                                            : lang === "golang"
-                                                ? GolangImage
-                                                : lang === "php"
-                                                    ? PHPImage
-                                                    : ""
-                                    : selectedOption === "frontend" &&
-                                        lang === "reactjs"
-                                        ? ReactJSImage : lang === "nextjs"
-                                            ? NextJSImage : lang === "angularjs"
-                                                ? AngularJSImage : lang === "vuejs"
-                                                    ? VueJSImage : lang === "html"
-                                                        ? HTMLImage
-                                                        : "";
+                    <Box sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}>
+                        {languages.map((lang) => {
+                            let imageSrc: string | StaticImageData | null = null;
+
+                            if (selectedOption === "backend") {
+                                if (lang === "nodejs") imageSrc = NodeJSImage;
+                                else if (lang === "python") imageSrc = PythonImage;
+                                else if (lang === "golang") imageSrc = GolangImage;
+                                else if (lang === "php") imageSrc = PHPImage;
+                            } else if (selectedOption === "frontend") {
+                                if (lang === "reactjs") imageSrc = ReactJSImage;
+                                else if (lang === "nextjs") imageSrc = NextJSImage;
+                                else if (lang === "angularjs") imageSrc = AngularJSImage;
+                                else if (lang === "vuejs") imageSrc = VueJSImage;
+                                else if (lang === "html") imageSrc = HTMLImage;
+                            } else if (selectedOption === "database") {
+                                if (lang === "mongodb") imageSrc = MongoDBGif;
+                            }
+
                             if (!imageSrc) return null;
+
                             return (
                                 <motion.div
                                     key={lang}
@@ -355,8 +400,7 @@ export default function FileUpload() {
                                             width: 90,
                                             height: 90,
                                             borderRadius: "50%",
-                                            border: `2px solid ${language === lang ? "#1976d2" : "#fafafa"
-                                                }`,
+                                            border: `2px solid ${language === lang ? "#1976d2" : "#fafafa"}`,
                                             display: "flex",
                                             justifyContent: "center",
                                             alignItems: "center",
@@ -386,28 +430,32 @@ export default function FileUpload() {
             )}
             {language && (
                 <Box>
-                    <Box
-                        {...getRootProps()}
-                        sx={{
-                            border: "2px dashed #1976d2",
-                            p: 3,
-                            textAlign: "center",
-                            cursor: "pointer",
-                            backgroundColor: "#fafafa",
-                            "&:hover": { backgroundColor: "#f0f0f0" },
-                            transition: "background-color 0.3s ease",
-                        }}
-                    >
-                        <input {...getInputProps()} />
-                        <Typography>
-                            Drag & drop your project zip file here, or click to upload
-                        </Typography>
-                    </Box>
-                    {missingFiles.length > 0 && (
+                    {language !== "mongodb" && (
+                        <Box
+                            {...getRootProps()}
+                            sx={{
+                                border: "2px dashed #1976d2",
+                                p: 3,
+                                textAlign: "center",
+                                cursor: "pointer",
+                                backgroundColor: "#fafafa",
+                                "&:hover": { backgroundColor: "#f0f0f0" },
+                                transition: "background-color 0.3s ease",
+                            }}
+                        >
+                            <input {...getInputProps()} />
+                            <Typography>
+                                Drag & drop your project zip file here, or click to upload
+                            </Typography>
+                        </Box>
+                    )}
+
+                    {language !== "mongodb" && missingFiles.length > 0 && (
                         <Alert severity='error' sx={{ mt: 2 }}>
                             Missing Files: {missingFiles.join(", ")}
                         </Alert>
                     )}
+
                     <Dialog
                         open={projectDialogOpen}
                         onClose={() => setProjectDialogOpen(false)}
@@ -422,32 +470,36 @@ export default function FileUpload() {
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
                             />
-                            <TextField
-                                label='Run Command'
-                                fullWidth
-                                value={runCommand}
-                                onChange={(e) => setRunCommand(e.target.value)}
-                                placeholder='e.g., node server.js'
-                                sx={{ mb: 2 }}
-                            />
-                            <Box
-                                sx={{
-                                    maxHeight: 200,
-                                    overflowY: "auto",
-                                    border: "1px solid #ccc",
-                                    p: 2,
-                                    mb: 2,
-                                }}
-                            >
-                                <Typography variant='h6' mb={1}>
-                                    Files in Zip:
-                                </Typography>
-                                <List>
-                                    {fileContents.map((file, index) => (
-                                        <ListItem key={index}>{file.path}</ListItem>
-                                    ))}
-                                </List>
-                            </Box>
+                            {language !== "mongodb" && (
+                                <TextField
+                                    label='Run Command'
+                                    fullWidth
+                                    value={runCommand}
+                                    onChange={(e) => setRunCommand(e.target.value)}
+                                    placeholder='e.g., node server.js'
+                                    sx={{ mb: 2 }}
+                                />
+                            )}
+                            {language !== "mongodb" && (
+                                <Box
+                                    sx={{
+                                        maxHeight: 200,
+                                        overflowY: "auto",
+                                        border: "1px solid #ccc",
+                                        p: 2,
+                                        mb: 2,
+                                    }}
+                                >
+                                    <Typography variant='h6' mb={1}>
+                                        Files in Zip:
+                                    </Typography>
+                                    <List>
+                                        {fileContents.map((file, index) => (
+                                            <ListItem key={index}>{file.path}</ListItem>
+                                        ))}
+                                    </List>
+                                </Box>
+                            )}
                         </DialogContent>
                         <DialogActions>
                             <Button onClick={() => setProjectDialogOpen(false)}>
@@ -457,10 +509,11 @@ export default function FileUpload() {
                                 onClick={handleUpload}
                                 disabled={isUploading || !projectName}
                             >
-                                {isUploading ? <CircularProgress size={20} /> : "Upload"}
+                                {isUploading ? <CircularProgress size={20} /> : language !== "mongodb" ? "Upload" : "Create Database"}
                             </Button>
                         </DialogActions>
                     </Dialog>
+
                     {uploadMessage && (
                         <Alert severity={uploadMessage.type} sx={{ mt: 2 }}>
                             {uploadMessage.text}
@@ -468,6 +521,7 @@ export default function FileUpload() {
                     )}
                 </Box>
             )}
+
         </Box>
     );
 }
