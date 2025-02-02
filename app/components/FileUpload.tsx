@@ -147,14 +147,12 @@ export default function FileUpload() {
         }
         if (
             (language === "mongodb" && !projectName) ||
-            (
-                ["nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) &&
-                (!projectName || !fileContents)
-            ) ||
-            (
-                !["mongodb", "nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) &&
-                (!projectName || !fileContents || !runCommand || !selectedOption)
-            )
+            (["nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) &&
+                (!projectName || !fileContents)) ||
+            (!["mongodb", "nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(
+                language
+            ) &&
+                (!projectName || !fileContents || !runCommand || !selectedOption))
         ) {
             return;
         }
@@ -169,7 +167,9 @@ export default function FileUpload() {
             language: language.toLowerCase(),
         };
 
-        if (["nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language)) {
+        if (
+            ["nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language)
+        ) {
             bodyData.files = fileContents;
         } else if (!["mongodb"].includes(language)) {
             bodyData.files = fileContents;
@@ -186,28 +186,16 @@ export default function FileUpload() {
 
             if (response.ok) {
                 const responseData = await response.json();
+                console.log(responseData);
+
                 const successMessage = responseData.message || "Upload successful";
 
                 if (language === "mongodb") {
-                    const mongodbDetails = `
-                    MongoDB URL: ${responseData.mongodbUrl}
-                    Mongo Express URL: ${responseData.mongoExpressUrl}
-                    Username: ${responseData.username}
-                    Password: ${responseData.password}
-                `;
-                    const successMessageWithDetails = `${successMessage}\n${mongodbDetails}`;
+                    const mongodbDetails = `MongoDB URL: ${responseData.mongodbUrl}\nMongo Express URL: ${responseData.mongoExpressUrl}\nUsername: ${responseData.username}\nPassword: ${responseData.password}`;
 
-                    const formattedMessage = successMessageWithDetails
-                        .split("\n")
-                        .map((item, index) => (
-                            <span key={index}>
-                                {item}
-                                <br />
-                            </span>
-                        ));
                     setUploadMessage({
                         type: "success",
-                        text: String(formattedMessage),
+                        text: `${successMessage}\n\n${mongodbDetails}`, // Single string with line breaks
                     });
                 } else {
                     setUploadMessage({
@@ -235,7 +223,6 @@ export default function FileUpload() {
             setProjectDialogOpen(false);
         }
     };
-
 
     const { getRootProps, getInputProps } = useDropzone({
         onDrop,
@@ -496,16 +483,23 @@ export default function FileUpload() {
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
                             />
-                            {!["mongodb", "nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) && (
-                                <TextField
-                                    label='Run Command'
-                                    fullWidth
-                                    value={runCommand}
-                                    onChange={(e) => setRunCommand(e.target.value)}
-                                    placeholder='e.g., node server.js'
-                                    sx={{ mb: 2 }}
-                                />
-                            )}
+                            {![
+                                "mongodb",
+                                "nextjs",
+                                "reactjs",
+                                "vuejs",
+                                "angularjs",
+                                "html",
+                            ].includes(language) && (
+                                    <TextField
+                                        label='Run Command'
+                                        fullWidth
+                                        value={runCommand}
+                                        onChange={(e) => setRunCommand(e.target.value)}
+                                        placeholder='e.g., node server.js'
+                                        sx={{ mb: 2 }}
+                                    />
+                                )}
                             {language !== "mongodb" && (
                                 <Box
                                     sx={{
