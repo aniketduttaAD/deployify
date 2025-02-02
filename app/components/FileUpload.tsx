@@ -159,7 +159,7 @@ export default function FileUpload() {
             files?: unknown;
             runCommand?: string;
         } = {
-            projectName,
+            projectName: projectName.toLowerCase(),
             language: language.toLowerCase(),
         };
 
