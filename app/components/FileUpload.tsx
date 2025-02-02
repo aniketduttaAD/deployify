@@ -142,17 +142,23 @@ export default function FileUpload() {
     }, [language]);
 
     const handleUpload = async () => {
+        if (!language) {
+            return;
+        }
         if (
             (language === "mongodb" && !projectName) ||
-            (language !== "mongodb" &&
-                (!fileContents ||
-                    !projectName ||
-                    !runCommand ||
-                    !language ||
-                    !selectedOption))
+            (
+                ["nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) &&
+                (!projectName || !fileContents)
+            ) ||
+            (
+                !["mongodb", "nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) &&
+                (!projectName || !fileContents || !runCommand || !selectedOption)
+            )
         ) {
             return;
         }
+
         const bodyData: {
             projectName: string;
             language: string;
@@ -163,7 +169,9 @@ export default function FileUpload() {
             language: language.toLowerCase(),
         };
 
-        if (language !== "mongodb") {
+        if (["nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language)) {
+            bodyData.files = fileContents;
+        } else if (!["mongodb"].includes(language)) {
             bodyData.files = fileContents;
             bodyData.runCommand = runCommand;
         }
@@ -175,24 +183,28 @@ export default function FileUpload() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(bodyData),
             });
+
             if (response.ok) {
                 const responseData = await response.json();
                 const successMessage = responseData.message || "Upload successful";
+
                 if (language === "mongodb") {
                     const mongodbDetails = `
-                MongoDB URL: ${responseData.mongodbUrl}
-                Mongo Express URL: ${responseData.mongoExpressUrl}
-                Username: ${responseData.username}
-                Password: ${responseData.password}
+                    MongoDB URL: ${responseData.mongodbUrl}
+                    Mongo Express URL: ${responseData.mongoExpressUrl}
+                    Username: ${responseData.username}
+                    Password: ${responseData.password}
                 `;
                     const successMessageWithDetails = `${successMessage}\n${mongodbDetails}`;
 
-                    const formattedMessage = successMessageWithDetails.split("\n").map((item, index) => (
-                        <span key={index}>
-                            {item}
-                            <br />
-                        </span>
-                    ));
+                    const formattedMessage = successMessageWithDetails
+                        .split("\n")
+                        .map((item, index) => (
+                            <span key={index}>
+                                {item}
+                                <br />
+                            </span>
+                        ));
                     setUploadMessage({
                         type: "success",
                         text: String(formattedMessage),
@@ -223,6 +235,7 @@ export default function FileUpload() {
             setProjectDialogOpen(false);
         }
     };
+
 
     const { getRootProps, getInputProps } = useDropzone({
         onDrop,
@@ -355,18 +368,30 @@ export default function FileUpload() {
                     {selectedOption && (
                         <>
                             <Image
-                                src={selectedOption === "backend" ? BackendGif : selectedOption === "frontend" ? FrontendGif : DatabaseGif}
+                                src={
+                                    selectedOption === "backend"
+                                        ? BackendGif
+                                        : selectedOption === "frontend"
+                                            ? FrontendGif
+                                            : DatabaseGif
+                                }
                                 alt='Backend'
                                 width={100}
                                 height={100}
                                 onClick={() => setSelectedOption(null)}
                             />
                             <Typography sx={{ mt: -2, mb: 2 }}>
-                                {selectedOption === "backend" ? "Backend" : selectedOption === "frontend" ? "Frontend" : "Database"}
+                                {selectedOption === "backend"
+                                    ? "Backend"
+                                    : selectedOption === "frontend"
+                                        ? "Frontend"
+                                        : "Database"}
                             </Typography>
                         </>
                     )}
-                    <Box sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}>
+                    <Box
+                        sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}
+                    >
                         {languages.map((lang) => {
                             let imageSrc: string | StaticImageData | null = null;
 
@@ -400,7 +425,8 @@ export default function FileUpload() {
                                             width: 90,
                                             height: 90,
                                             borderRadius: "50%",
-                                            border: `2px solid ${language === lang ? "#1976d2" : "#fafafa"}`,
+                                            border: `2px solid ${language === lang ? "#1976d2" : "#fafafa"
+                                                }`,
                                             display: "flex",
                                             justifyContent: "center",
                                             alignItems: "center",
@@ -470,7 +496,7 @@ export default function FileUpload() {
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
                             />
-                            {language !== "mongodb" && (
+                            {!["mongodb", "nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) && (
                                 <TextField
                                     label='Run Command'
                                     fullWidth
@@ -509,7 +535,13 @@ export default function FileUpload() {
                                 onClick={handleUpload}
                                 disabled={isUploading || !projectName}
                             >
-                                {isUploading ? <CircularProgress size={20} /> : language !== "mongodb" ? "Upload" : "Create Database"}
+                                {isUploading ? (
+                                    <CircularProgress size={20} />
+                                ) : language !== "mongodb" ? (
+                                    "Upload"
+                                ) : (
+                                    "Create Database"
+                                )}
                             </Button>
                         </DialogActions>
                     </Dialog>
@@ -521,7 +553,6 @@ export default function FileUpload() {
                     )}
                 </Box>
             )}
-
         </Box>
     );
 }
