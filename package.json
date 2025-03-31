@@ -11,7 +11,8 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
-    "@mui/material": "^6.4.1",
+    "@mui/icons-material": "^7.0.1",
+    "@mui/material": "^6.4.9",
     "framer-motion": "^12.0.6",
     "jszip": "^3.10.1",
     "next": "15.1.6",

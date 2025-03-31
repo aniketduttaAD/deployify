@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import {
     Box,
@@ -13,6 +13,10 @@ import {
     Alert,
     List,
     ListItem,
+    LinearProgress,
+    Paper,
+    Chip,
+    useTheme,
 } from "@mui/material";
 import JSZip from "jszip";
 import NodeJSImage from "../../assets/nodejs.gif";
@@ -29,19 +33,145 @@ import FrontendGif from "../../assets/frontend.gif";
 import BackendGif from "../../assets/backend.gif";
 import DatabaseGif from "../../assets/database.gif";
 import Image, { StaticImageData } from "next/image";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import CodeIcon from '@mui/icons-material/Code';
+import DoneIcon from '@mui/icons-material/Done';
+import ErrorIcon from '@mui/icons-material/Error';
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 
+// Type definitions
 type FileItem = {
     path: string;
     content: string;
 };
 
+type ProgressType = {
+    percentage: number;
+    message: string;
+};
+
+// Component to display deployment progress from WebSocket
+const DeploymentProgress = ({ progress }: { progress: ProgressType | null }) => {
+    const theme = useTheme();
+
+    if (!progress) return null;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+        >
+            <Paper
+                elevation={3}
+                sx={{
+                    mb: 3,
+                    mt: 2,
+                    p: 2,
+                    borderLeft: `4px solid ${theme.palette.primary.main}`,
+                    background: 'linear-gradient(to right, rgba(99, 102, 241, 0.05), transparent)'
+                }}
+            >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <RocketLaunchIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+                        <Typography variant="body1" color="primary" fontWeight={600}>
+                            {progress.message}
+                        </Typography>
+                    </Box>
+                    <Typography variant="body2" color="primary.dark" fontWeight={700} sx={{ ml: 2 }}>
+                        {progress.percentage}%
+                    </Typography>
+                </Box>
+
+                <Box sx={{ position: 'relative', mt: 1, mb: 1 }}>
+                    <LinearProgress
+                        variant="determinate"
+                        value={progress.percentage}
+                        sx={{
+                            height: 10,
+                            borderRadius: 5,
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            '& .MuiLinearProgress-bar': {
+                                borderRadius: 5,
+                                backgroundImage: `linear-gradient(90deg, ${theme.palette.primary.light}, ${theme.palette.primary.main})`,
+                            }
+                        }}
+                    />
+
+                    {/* Animated pulse effect at progress edge */}
+                    {/* {progress.percentage < 100 && (
+                        <Box
+                            component={motion.div}
+                            animate={{
+                                opacity: [0.7, 1, 0.7],
+                                scale: [1, 1.2, 1],
+                            }}
+                            transition={{
+                                duration: 1.5,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                            }}
+                            sx={{
+                                position: 'absolute',
+                                top: '-40%',
+                                left: `${progress.percentage}%`,
+                                transform: 'translate(-50%, -50%)',
+                                width: 16,
+                                height: 16,
+                                borderRadius: '50%',
+                                bgcolor: theme.palette.primary.main,
+                                zIndex: 1,
+                            }}
+                        />
+                    )} */}
+                </Box>
+
+                {progress.percentage === 100 && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.5 }}
+                    >
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                            <DoneIcon sx={{ color: 'success.main', mr: 1 }} />
+                            <Typography variant="body2" color="success.main">
+                                Deployment process completed! Finalizing...
+                            </Typography>
+                        </Box>
+                    </motion.div>
+                )}
+            </Paper>
+        </motion.div>
+    );
+};
+
+// Component to display WebSocket connection status
+const ConnectionStatusIndicator = ({ status }: { status: 'connecting' | 'connected' | 'disconnected' | null }) => {
+    if (!status) return null;
+
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Chip
+                size="small"
+                label={status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                color={status === 'connected' ? 'success' : status === 'connecting' ? 'warning' : 'error'}
+                sx={{ fontSize: '0.7rem', height: 24 }}
+            />
+        </Box>
+    );
+};
+
 export default function FileUpload() {
+    const theme = useTheme();
     const [fileContents, setFileContents] = useState<FileItem[]>([]);
     const [missingFiles, setMissingFiles] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [projectName, setProjectName] = useState<string>("");
-    const [runCommand, setRunCommand] = useState<string>("node server.js");
+    const [runCommand, setRunCommand] = useState<string>("");
     const [projectDialogOpen, setProjectDialogOpen] = useState(false);
     const [uploadMessage, setUploadMessage] = useState<{
         type: "success" | "error";
@@ -53,9 +183,16 @@ export default function FileUpload() {
     const [selectedOption, setSelectedOption] = useState<
         "frontend" | "backend" | "database" | null
     >(null);
+    const [progress, setProgress] = useState<ProgressType | null>(null);
+    const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
+    const [fileName, setFileName] = useState<string | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
+    const sessionIdRef = useRef<string | null>(null);
+    const [lastMessageTimestamp, setLastMessageTimestamp] = useState<number>(0);
+    const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | null>(null);
 
     const restrictedFolders = ["node_modules", "yarn.lock", "package-lock.json"];
-    const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:5001";
+    const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:5002";
 
     const requiredFiles = {
         nodejs: ["package.json"],
@@ -83,6 +220,106 @@ export default function FileUpload() {
         "mongodb",
     ] as const;
 
+    // Generate a unique session ID for WebSocket connection
+    useEffect(() => {
+        if (!sessionIdRef.current) {
+            sessionIdRef.current = Math.random().toString(36).substring(2, 15);
+        }
+    }, []);
+
+    // Setup default run command based on language
+    useEffect(() => {
+        if (language) {
+            switch (language) {
+                case "nodejs":
+                    setRunCommand("node server.js");
+                    break;
+                case "python":
+                    setRunCommand("python manage.py runserver 0.0.0.0:8000");
+                    break;
+                case "php":
+                    setRunCommand("php -S 0.0.0.0:8000");
+                    break;
+                case "golang":
+                    setRunCommand("go run main.go");
+                    break;
+                default:
+                    setRunCommand("");
+            }
+        }
+    }, [language]);
+
+    // Initialize WebSocket connection 
+    const initWebSocket = useCallback(() => {
+        if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
+        setConnectionStatus('connecting');
+
+        const wsUrl = `${BASE_URL.replace(/^http/, 'ws')}/ws/${sessionIdRef.current}`;
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            setConnectionStatus('connected');
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                setProgress({
+                    percentage: data.percentage || 0,
+                    message: data.message || "Processing..."
+                });
+                setLastMessageTimestamp(Date.now());
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            setConnectionStatus('disconnected');
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            setConnectionStatus('disconnected');
+        };
+
+        wsRef.current = ws;
+    }, [BASE_URL]);
+
+    // Check for stale WebSocket connection
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (isUploading && lastMessageTimestamp > 0) {
+                const timeSinceLastMessage = Date.now() - lastMessageTimestamp;
+                if (timeSinceLastMessage > 15000) { // 15 seconds without a message
+                    console.log('WebSocket connection might be stale, attempting to reconnect');
+                    if (wsRef.current) {
+                        wsRef.current.close();
+                        wsRef.current = null;
+                    }
+                    initWebSocket();
+                }
+            }
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [initWebSocket, isUploading, lastMessageTimestamp]);
+
+    // Clean up WebSocket connection
+    useEffect(() => {
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
+            }
+        };
+    }, []);
+
     const validateFiles = (files: FileItem[]) => {
         if (!language || !(language in requiredFiles)) return false;
         const required = requiredFiles[language];
@@ -94,9 +331,14 @@ export default function FileUpload() {
     };
 
     const onDrop = async (acceptedFiles: File[]) => {
+        if (acceptedFiles.length === 0) return;
+
         setMissingFiles([]);
         setFileContents([]);
         setUploadMessage(null);
+        setProgress(null);
+        setDeploymentUrl(null);
+        setFileName(acceptedFiles[0].name);
 
         const zip = new JSZip();
 
@@ -141,6 +383,26 @@ export default function FileUpload() {
         }
     }, [language]);
 
+    const resetForm = () => {
+        setFileContents([]);
+        setMissingFiles([]);
+        setSelectedOption(null);
+        setLanguage(null);
+        setProjectName("");
+        setRunCommand("");
+        setUploadMessage(null);
+        setProgress(null);
+        setDeploymentUrl(null);
+        setFileName(null);
+        setLastMessageTimestamp(0);
+        setConnectionStatus(null);
+
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+    };
+
     const handleUpload = async () => {
         if (!language) {
             return;
@@ -148,22 +410,28 @@ export default function FileUpload() {
         if (
             (language === "mongodb" && !projectName) ||
             (["nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(language) &&
-                (!projectName || !fileContents)) ||
+                (!projectName || !fileContents.length)) ||
             (!["mongodb", "nextjs", "reactjs", "vuejs", "angularjs", "html"].includes(
                 language
             ) &&
-                (!projectName || !fileContents || !runCommand || !selectedOption))
+                (!projectName || !fileContents.length || !runCommand || !selectedOption))
         ) {
             return;
         }
 
+        // Initialize WebSocket before starting upload
+        initWebSocket();
+
+        // Close the modal immediately when deploy button is clicked
+        setProjectDialogOpen(false);
+
         const bodyData: {
             projectName: string;
             language: string;
-            files?: unknown;
+            files?: FileItem[];
             runCommand?: string;
         } = {
-            projectName: projectName.toLowerCase(),
+            projectName: projectName.toLowerCase().trim(),
             language: language.toLowerCase(),
         };
 
@@ -178,7 +446,10 @@ export default function FileUpload() {
 
         try {
             setIsUploading(true);
-            const response = await fetch(`${BASE_URL}/upload`, {
+            setProgress({ percentage: 0, message: "Starting deployment..." });
+            setLastMessageTimestamp(Date.now());
+
+            const response = await fetch(`${BASE_URL}/upload?sessionId=${sessionIdRef.current}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(bodyData),
@@ -188,19 +459,21 @@ export default function FileUpload() {
                 const responseData = await response.json();
                 console.log(responseData);
 
-                const successMessage = responseData.message || "Upload successful";
+                if (responseData.url) {
+                    setDeploymentUrl(responseData.url);
+                }
 
                 if (language === "mongodb") {
-                    const mongodbDetails = `MongoDB URL: ${responseData.mongodbUrl}\nMongo Express URL: ${responseData.mongoExpressUrl}\nUsername: ${responseData.username}\nPassword: ${responseData.password}`;
-
                     setUploadMessage({
                         type: "success",
-                        text: `${successMessage}\n\n${mongodbDetails}`, // Single string with line breaks
+                        text: responseData.message || "Database created successfully",
                     });
+                    // Store details for MongoDB deployment
+                    setDeploymentUrl(responseData.mongoExpressUrl);
                 } else {
                     setUploadMessage({
                         type: "success",
-                        text: successMessage,
+                        text: responseData.message || "Deployment successful",
                     });
                 }
             } else {
@@ -216,169 +489,181 @@ export default function FileUpload() {
                 type: "error",
                 text: "Upload failed. Please try again.",
             });
-            setProjectDialogOpen(false);
-            setIsUploading(false);
         } finally {
             setIsUploading(false);
-            setProjectDialogOpen(false);
         }
     };
 
     const { getRootProps, getInputProps } = useDropzone({
         onDrop,
         accept: { "application/zip": [".zip"] },
+        disabled: isUploading,
     });
+
+    const OptionBox = ({ title, image, onClick }: { title: string, image: StaticImageData, onClick: () => void }) => (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+        >
+            <Paper
+                elevation={2}
+                onClick={onClick}
+                sx={{
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    width: 120,
+                    height: 160,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: '#fff',
+                    border: '1px solid rgba(0, 0, 0, 0.08)',
+                    borderRadius: 2,
+                    p: 2,
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 12px 20px rgba(0, 0, 0, 0.1)',
+                        backgroundColor: '#FAFAFA',
+                        borderColor: theme.palette.primary.light,
+                    },
+                }}
+            >
+                <Box sx={{ mb: 2, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Image
+                        src={image}
+                        alt={title}
+                        width={70}
+                        height={70}
+                        unoptimized
+                    />
+                </Box>
+                <Typography sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>{title}</Typography>
+            </Paper>
+        </motion.div>
+    );
+
+    const LanguageBox = ({ lang, image }: { lang: string, image: StaticImageData }) => (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+        >
+            <Paper
+                elevation={language === lang ? 3 : 1}
+                onClick={() => setLanguage(lang as never)}
+                sx={{
+                    width: 90,
+                    height: 90,
+                    borderRadius: '12px',
+                    border: `2px solid ${language === lang ? theme.palette.primary.main : 'transparent'}`,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    backgroundColor: '#fff',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                        transform: 'scale(1.05)',
+                        boxShadow: '0 8px 16px rgba(0, 0, 0, 0.1)',
+                        borderColor: theme.palette.primary.light,
+                        backgroundColor: '#fafafa',
+                    },
+                }}
+            >
+                <Image
+                    src={image}
+                    alt={lang}
+                    width={54}
+                    height={54}
+                    unoptimized
+                />
+            </Paper>
+        </motion.div>
+    );
 
     return (
         <Box
             sx={{
-                maxWidth: 600,
-                mx: "auto",
-                p: 3,
-                borderRadius: 4,
-                boxShadow: 4,
-                backgroundColor: "#fff",
-                transition: "box-shadow 0.3s ease",
-                "&:hover": { boxShadow: "0px 8px 20px rgba(0, 0, 0, 0.1)" },
+                width: '100%',
+                p: { xs: 2, md: 6 },
+                position: 'relative',
+                margin: 0
             }}
         >
-            {selectedOption === null && (
-                <Typography variant='h5' align='center' sx={{ mb: 2, fontWeight: 600 }}>
-                    Choose an Option
+            {/* Header with option to reset flow */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                <Typography variant='h5' sx={{
+                    fontWeight: 700,
+                    color: theme.palette.primary.main,
+                    display: 'flex',
+                    alignItems: 'center'
+                }}>
+                    {/* {selectedOption && (
+                        <IconButton
+                            onClick={() => {
+                                setSelectedOption(null);
+                                setLanguage(null);
+                            }}
+                            sx={{ mr: 1, color: theme.palette.primary.main }}
+                            disabled={isUploading}
+                        >
+                            <ArrowBackIcon />
+                        </IconButton>
+                    )} */}
+                    {selectedOption ? `${selectedOption.charAt(0).toUpperCase() + selectedOption.slice(1)} Deployment` : 'Choose Deployment Type'}
                 </Typography>
-            )}
-            <Box sx={{ display: "flex", justifyContent: "center", gap: 4, mb: 4 }}>
-                {selectedOption === null && (
-                    <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: selectedOption === null ? 1 : 0 }}
-                            transition={{ duration: 0.5 }}
-                        >
-                            <Box
-                                onClick={() => setSelectedOption("frontend")}
-                                sx={{
-                                    cursor: "pointer",
-                                    textAlign: "center",
-                                    width: 100,
-                                    display: "inline-block",
-                                    transition:
-                                        "transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease",
-                                    "&:hover": {
-                                        transform: "scale(1.1)",
-                                        boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
-                                        backgroundColor: "#f5f5f5",
-                                    },
-                                }}
-                            >
-                                <Image
-                                    src={FrontendGif}
-                                    alt='Frontend'
-                                    width={100}
-                                    height={100}
-                                />
-                                <Typography>Frontend</Typography>
-                            </Box>
-                        </motion.div>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: selectedOption === null ? 1 : 0 }}
-                            transition={{ duration: 0.5 }}
-                        >
-                            <Box
-                                onClick={() => setSelectedOption("backend")}
-                                sx={{
-                                    cursor: "pointer",
-                                    textAlign: "center",
-                                    width: 100,
-                                    display: "inline-block",
-                                    transition:
-                                        "transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease",
-                                    "&:hover": {
-                                        transform: "scale(1.1)",
-                                        boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
-                                        backgroundColor: "#f5f5f5",
-                                    },
-                                }}
-                            >
-                                <Image
-                                    src={BackendGif}
-                                    alt='Backend'
-                                    width={100}
-                                    height={100}
-                                />
-                                <Typography sx={{ mt: 1 }}>Backend</Typography>
-                            </Box>
-                        </motion.div>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: selectedOption === null ? 1 : 0 }}
-                            transition={{ duration: 0.5 }}
-                        >
-                            <Box
-                                onClick={() => setSelectedOption("database")}
-                                sx={{
-                                    cursor: "pointer",
-                                    textAlign: "center",
-                                    width: 100,
-                                    display: "inline-block",
-                                    transition:
-                                        "transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease",
-                                    "&:hover": {
-                                        transform: "scale(1.1)",
-                                        boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
-                                        backgroundColor: "#f5f5f5",
-                                    },
-                                }}
-                            >
-                                <Image
-                                    src={DatabaseGif}
-                                    alt='Database'
-                                    width={100}
-                                    height={100}
-                                />
-                                <Typography>Database</Typography>
-                            </Box>
-                        </motion.div>
-                    </>
+
+                {(selectedOption || language || fileContents.length > 0) && (
+                    <Button
+                        startIcon={<RestartAltIcon />}
+                        variant="outlined"
+                        color="primary"
+                        size="small"
+                        onClick={resetForm}
+                        sx={{ textTransform: 'none' }}
+                        disabled={isUploading}
+                    >
+                        Reset
+                    </Button>
                 )}
             </Box>
-            {selectedOption && (
+
+            {/* WebSocket connection status indicator */}
+            <ConnectionStatusIndicator status={connectionStatus} />
+
+            {/* Progress indicator during deployment */}
+            <AnimatePresence>
+                <DeploymentProgress progress={progress} />
+            </AnimatePresence>
+
+            {/* Deployment type selection */}
+            {!selectedOption && !language && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap', mb: 4 }}>
+                    <OptionBox
+                        title="Frontend"
+                        image={FrontendGif}
+                        onClick={() => setSelectedOption("frontend")}
+                    />
+                    <OptionBox
+                        title="Backend"
+                        image={BackendGif}
+                        onClick={() => setSelectedOption("backend")}
+                    />
+                    <OptionBox
+                        title="Database"
+                        image={DatabaseGif}
+                        onClick={() => setSelectedOption("database")}
+                    />
+                </Box>
+            )}
+
+            {/* Language selection */}
+            {selectedOption && !language && (
                 <Box>
-                    <Typography
-                        variant='h5'
-                        align='center'
-                        sx={{ mb: 2, fontWeight: 600 }}
-                    >
-                        Choose a Language
-                    </Typography>
-                    {selectedOption && (
-                        <>
-                            <Image
-                                src={
-                                    selectedOption === "backend"
-                                        ? BackendGif
-                                        : selectedOption === "frontend"
-                                            ? FrontendGif
-                                            : DatabaseGif
-                                }
-                                alt='Backend'
-                                width={100}
-                                height={100}
-                                onClick={() => setSelectedOption(null)}
-                            />
-                            <Typography sx={{ mt: -2, mb: 2 }}>
-                                {selectedOption === "backend"
-                                    ? "Backend"
-                                    : selectedOption === "frontend"
-                                        ? "Frontend"
-                                        : "Database"}
-                            </Typography>
-                        </>
-                    )}
-                    <Box
-                        sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 4 }}
-                    >
+                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: { xs: 2, md: 3 }, flexWrap: 'wrap', mb: 4 }}>
                         {languages.map((lang) => {
                             let imageSrc: string | StaticImageData | null = null;
 
@@ -400,152 +685,300 @@ export default function FileUpload() {
                             if (!imageSrc) return null;
 
                             return (
-                                <motion.div
+                                <LanguageBox
                                     key={lang}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: selectedOption ? 1 : 0 }}
-                                    transition={{ duration: 0.5 }}
-                                >
-                                    <Box
-                                        onClick={() => setLanguage(lang)}
-                                        sx={{
-                                            width: 90,
-                                            height: 90,
-                                            borderRadius: "50%",
-                                            border: `2px solid ${language === lang ? "#1976d2" : "#fafafa"
-                                                }`,
-                                            display: "flex",
-                                            justifyContent: "center",
-                                            alignItems: "center",
-                                            cursor: "pointer",
-                                            backgroundColor: "#fff",
-                                            transition:
-                                                "background-color 0.3s ease, border-color 0.3s ease",
-                                            "&:hover": {
-                                                backgroundColor: "#e3f2fd",
-                                                borderColor: "#1976d2",
-                                            },
-                                        }}
-                                    >
-                                        <Image
-                                            src={imageSrc}
-                                            alt={lang}
-                                            width={54}
-                                            height={54}
-                                            unoptimized
-                                        />
-                                    </Box>
-                                </motion.div>
+                                    lang={lang}
+                                    image={imageSrc}
+                                />
                             );
                         })}
                     </Box>
                 </Box>
             )}
-            {language && (
-                <Box>
-                    {language !== "mongodb" && (
-                        <Box
-                            {...getRootProps()}
-                            sx={{
-                                border: "2px dashed #1976d2",
-                                p: 3,
-                                textAlign: "center",
-                                cursor: "pointer",
-                                backgroundColor: "#fafafa",
-                                "&:hover": { backgroundColor: "#f0f0f0" },
-                                transition: "background-color 0.3s ease",
+
+            {/* File upload area - only show when not uploading */}
+            {language && language !== "mongodb" && !isUploading && !uploadMessage && (
+                <Box sx={{ mt: 3 }}>
+                    <Box
+                        {...getRootProps()}
+                        sx={{
+                            border: `2px dashed ${theme.palette.primary.main}`,
+                            borderRadius: 0,
+                            p: 4,
+                            textAlign: 'center',
+                            cursor: 'pointer',
+                            backgroundColor: 'rgba(99, 102, 241, 0.04)',
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                                backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                                borderColor: theme.palette.primary.dark
+                            },
+                            mb: 3
+                        }}
+                    >
+                        <input {...getInputProps()} />
+                        <motion.div
+                            animate={{
+                                y: [0, -5, 0],
+                            }}
+                            transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut",
                             }}
                         >
-                            <input {...getInputProps()} />
-                            <Typography>
-                                Drag & drop your project zip file here, or click to upload
-                            </Typography>
-                        </Box>
-                    )}
+                            <CloudUploadIcon sx={{ fontSize: 48, color: theme.palette.primary.main, mb: 2 }} />
+                        </motion.div>
+                        <Typography variant="h6" gutterBottom color="primary" fontWeight={600}>
+                            {fileName ? fileName : "Drag & drop your project zip file here"}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            or click to select file
+                        </Typography>
+                    </Box>
 
-                    {language !== "mongodb" && missingFiles.length > 0 && (
-                        <Alert severity='error' sx={{ mt: 2 }}>
-                            Missing Files: {missingFiles.join(", ")}
-                        </Alert>
-                    )}
-
-                    <Dialog
-                        open={projectDialogOpen}
-                        onClose={() => setProjectDialogOpen(false)}
-                        fullWidth
-                    >
-                        <DialogTitle>Enter Project Details</DialogTitle>
-                        <DialogContent>
-                            <TextField
-                                label='Project Name'
-                                fullWidth
-                                sx={{ mb: 2, mt: 2 }}
-                                value={projectName}
-                                onChange={(e) => setProjectName(e.target.value)}
-                            />
-                            {![
-                                "mongodb",
-                                "nextjs",
-                                "reactjs",
-                                "vuejs",
-                                "angularjs",
-                                "html",
-                            ].includes(language) && (
-                                    <TextField
-                                        label='Run Command'
-                                        fullWidth
-                                        value={runCommand}
-                                        onChange={(e) => setRunCommand(e.target.value)}
-                                        placeholder='e.g., node server.js'
-                                        sx={{ mb: 2 }}
-                                    />
-                                )}
-                            {language !== "mongodb" && (
-                                <Box
-                                    sx={{
-                                        maxHeight: 200,
-                                        overflowY: "auto",
-                                        border: "1px solid #ccc",
-                                        p: 2,
-                                        mb: 2,
-                                    }}
-                                >
-                                    <Typography variant='h6' mb={1}>
-                                        Files in Zip:
-                                    </Typography>
-                                    <List>
-                                        {fileContents.map((file, index) => (
-                                            <ListItem key={index}>{file.path}</ListItem>
-                                        ))}
-                                    </List>
-                                </Box>
-                            )}
-                        </DialogContent>
-                        <DialogActions>
-                            <Button onClick={() => setProjectDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleUpload}
-                                disabled={isUploading || !projectName}
+                    {missingFiles.length > 0 && (
+                        <motion.div
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <Alert
+                                severity="error"
+                                sx={{
+                                    mt: 2,
+                                    mb: 2,
+                                    borderRadius: 0,
+                                    alignItems: 'flex-start'
+                                }}
+                                icon={<ErrorIcon fontSize="inherit" />}
                             >
-                                {isUploading ? (
-                                    <CircularProgress size={20} />
-                                ) : language !== "mongodb" ? (
-                                    "Upload"
-                                ) : (
-                                    "Create Database"
-                                )}
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
-
-                    {uploadMessage && (
-                        <Alert severity={uploadMessage.type} sx={{ mt: 2 }}>
-                            {uploadMessage.text}
-                        </Alert>
+                                <Typography fontWeight={600}>Missing Required Files:</Typography>
+                                <Box component="ul" sx={{ mt: 1, pl: 2 }}>
+                                    {missingFiles.map((file, index) => (
+                                        <motion.li
+                                            key={index}
+                                            initial={{ opacity: 0, x: -5 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ duration: 0.2, delay: index * 0.1 }}
+                                        >
+                                            <Typography variant="body2" sx={{ fontFamily: 'monospace', display: 'flex', alignItems: 'center' }}>
+                                                <CodeIcon sx={{ fontSize: 14, mr: 0.5 }} />
+                                                {file}
+                                            </Typography>
+                                        </motion.li>
+                                    ))}
+                                </Box>
+                            </Alert>
+                        </motion.div>
                     )}
                 </Box>
+            )}
+
+            {/* Project details dialog */}
+            <Dialog
+                open={projectDialogOpen}
+                onClose={() => !isUploading && setProjectDialogOpen(false)}
+                fullWidth
+                maxWidth="md"
+                PaperProps={{
+                    sx: {
+                        borderRadius: 0,
+                        boxShadow: '0 24px 48px rgba(0, 0, 0, 0.2)'
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+                    pb: 2,
+                    backgroundColor: theme.palette.primary.main,
+                    color: 'white',
+                }}>
+                    Enter {language === 'mongodb' ? 'Database' : 'Project'} Details
+                </DialogTitle>
+                <DialogContent sx={{ pt: 3, mt: 1 }}>
+                    <TextField
+                        label={language === 'mongodb' ? 'Database Name' : 'Project Name'}
+                        fullWidth
+                        sx={{ mb: 3, mt: 1 }}
+                        value={projectName}
+                        onChange={(e) => setProjectName(e.target.value)}
+                        variant="outlined"
+                        InputProps={{
+                            sx: { borderRadius: 0 }
+                        }}
+                        placeholder={language === 'mongodb' ? 'my-mongodb' : 'my-project'}
+                        focused
+                    />
+                    {![
+                        "mongodb",
+                        "nextjs",
+                        "reactjs",
+                        "vuejs",
+                        "angularjs",
+                        "html",
+                    ].includes(language || '') && (
+                            <TextField
+                                label='Run Command'
+                                fullWidth
+                                value={runCommand}
+                                onChange={(e) => setRunCommand(e.target.value)}
+                                placeholder='e.g., node server.js'
+                                sx={{ mb: 3 }}
+                                variant="outlined"
+                                InputProps={{
+                                    sx: { borderRadius: 0 }
+                                }}
+                            />
+                        )}
+                    {language !== "mongodb" && fileContents.length > 0 && (
+                        <Box
+                            sx={{
+                                maxHeight: 300,
+                                overflowY: "auto",
+                                border: '1px solid rgba(0, 0, 0, 0.1)',
+                                borderRadius: 0,
+                                p: 2,
+                                mb: 2,
+                                backgroundColor: 'rgba(0, 0, 0, 0.02)'
+                            }}
+                        >
+                            <Typography variant='subtitle1' mb={1} fontWeight={600}>
+                                Files in Project ({fileContents.length})
+                            </Typography>
+                            <List dense>
+                                {fileContents.map((file, index) => (
+                                    <ListItem key={index} sx={{ py: 0.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{file.path}</Typography>
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(0, 0, 0, 0.1)' }}>
+                    <Button
+                        onClick={() => setProjectDialogOpen(false)}
+                        disabled={isUploading}
+                        sx={{
+                            color: theme.palette.text.secondary,
+                            '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.05)' },
+                            borderRadius: 0
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleUpload}
+                        disabled={isUploading || !projectName.trim()}
+                        sx={{
+                            minWidth: 120,
+                            background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                            '&:hover': {
+                                background: `linear-gradient(90deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
+                            },
+                            borderRadius: 0
+                        }}
+                    >
+                        {isUploading ? (
+                            <CircularProgress size={24} color="inherit" />
+                        ) : language !== "mongodb" ? (
+                            "Deploy Project"
+                        ) : (
+                            "Create Database"
+                        )}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Deployment results - simplified version */}
+            {uploadMessage && (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                >
+                    <Paper
+                        elevation={3}
+                        sx={{
+                            mt: 3,
+                            p: 3,
+                            borderRadius: 0,
+                            border: `2px solid ${uploadMessage.type === 'success'
+                                ? theme.palette.success.light
+                                : theme.palette.error.light}`
+                        }}
+                    >
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <Typography variant="h6" color={uploadMessage.type === 'success' ? 'success.main' : 'error.main'} fontWeight={600}>
+                                {uploadMessage.type === 'success' ? 'Deployment Successful' : 'Deployment Failed'}
+                            </Typography>
+                            {uploadMessage.type === 'success' && (
+                                <Chip
+                                    label="LIVE"
+                                    size="small"
+                                    color="success"
+                                    sx={{ ml: 2, borderRadius: 1 }}
+                                />
+                            )}
+                        </Box>
+
+                        {/* Only show error message text */}
+                        {uploadMessage.type === 'error' && (
+                            <Typography sx={{ whiteSpace: 'pre-wrap', mb: 2 }}>
+                                {uploadMessage.text}
+                            </Typography>
+                        )}
+
+                        {/* Direct link display for successful deployment */}
+                        {uploadMessage.type === 'success' && deploymentUrl && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3, duration: 0.5 }}
+                            >
+                                <Box>
+                                    <Typography variant="subtitle1" gutterBottom color="text.secondary" fontWeight={500}>
+                                        Your application is available at:
+                                    </Typography>
+                                    <Button
+                                        variant="outlined"
+                                        color="primary"
+                                        href={deploymentUrl}
+                                        target="_blank"
+                                        sx={{
+                                            textTransform: 'none',
+                                            mt: 1,
+                                            borderRadius: 0,
+                                            borderWidth: 2,
+                                            '&:hover': {
+                                                borderWidth: 2,
+                                                backgroundColor: 'rgba(99, 102, 241, 0.08)'
+                                            }
+                                        }}
+                                    >
+                                        {deploymentUrl}
+                                    </Button>
+                                </Box>
+                            </motion.div>
+                        )}
+
+                        {language === 'mongodb' && uploadMessage.type === 'success' && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.5 }}
+                            >
+                                <Alert severity="info" sx={{ mt: 3, borderRadius: 0 }}>
+                                    <Typography variant="body2" fontWeight={600}>
+                                        Copy these credentials - they won&apos;t be shown again!
+                                    </Typography>
+                                </Alert>
+                            </motion.div>
+                        )}
+                    </Paper>
+                </motion.div>
             )}
         </Box>
     );
