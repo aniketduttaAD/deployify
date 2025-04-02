@@ -20,12 +20,12 @@ import {
 } from "@mui/material";
 import JSZip from "jszip";
 import NodeJSImage from "../../assets/nodejs.gif";
-import PHPImage from "../../assets/php.gif";
+// import PHPImage from "../../assets/php.gif";
 import GolangImage from "../../assets/golang.gif";
 import PythonImage from "../../assets/python.gif";
 import ReactJSImage from "../../assets/reactjs.gif";
 import NextJSImage from "../../assets/nextjs.png";
-import AngularJSImage from "../../assets/angularjs.gif";
+// import AngularJSImage from "../../assets/angularjs.gif";
 import VueJSImage from "../../assets/vuejs.gif";
 import HTMLImage from "../../assets/html.gif";
 import MongoDBGif from "../../assets/mongodb.gif";
@@ -190,7 +190,9 @@ export default function FileUpload() {
     const sessionIdRef = useRef<string | null>(null);
     const [lastMessageTimestamp, setLastMessageTimestamp] = useState<number>(0);
     const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | null>(null);
-
+    const [mongoUsername, setMongoUsername] = useState<string | null>(null);
+    const [mongoPassword, setMongoPassword] = useState<string | null>(null);
+    const [mongoConnectionString, setMongoConnectionString] = useState<string | null>(null);
     const restrictedFolders = ["node_modules", "yarn.lock", "package-lock.json"];
     const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:5002";
 
@@ -469,7 +471,10 @@ export default function FileUpload() {
                         text: responseData.message || "Database created successfully",
                     });
                     // Store details for MongoDB deployment
-                    setDeploymentUrl(responseData.mongoExpressUrl);
+                    setDeploymentUrl(responseData.mongodbUrl);
+                    setMongoUsername(responseData.username);
+                    setMongoPassword(responseData.password);
+                    setMongoConnectionString(responseData.connectionString);
                 } else {
                     setUploadMessage({
                         type: "success",
@@ -671,11 +676,11 @@ export default function FileUpload() {
                                 if (lang === "nodejs") imageSrc = NodeJSImage;
                                 else if (lang === "python") imageSrc = PythonImage;
                                 else if (lang === "golang") imageSrc = GolangImage;
-                                else if (lang === "php") imageSrc = PHPImage;
+                                // else if (lang === "php") imageSrc = PHPImage;
                             } else if (selectedOption === "frontend") {
                                 if (lang === "reactjs") imageSrc = ReactJSImage;
                                 else if (lang === "nextjs") imageSrc = NextJSImage;
-                                else if (lang === "angularjs") imageSrc = AngularJSImage;
+                                // else if (lang === "angularjs") imageSrc = AngularJSImage;
                                 else if (lang === "vuejs") imageSrc = VueJSImage;
                                 else if (lang === "html") imageSrc = HTMLImage;
                             } else if (selectedOption === "database") {
@@ -973,6 +978,11 @@ export default function FileUpload() {
                                 <Alert severity="info" sx={{ mt: 3, borderRadius: 0 }}>
                                     <Typography variant="body2" fontWeight={600}>
                                         Copy these credentials - they won&apos;t be shown again!
+                                    </Typography>
+                                    <Typography variant="subtitle1" gutterBottom color="text.secondary" fontWeight={500}>
+                                        {mongoUsername}
+                                        {mongoPassword}
+                                        {mongoConnectionString}
                                     </Typography>
                                 </Alert>
                             </motion.div>
